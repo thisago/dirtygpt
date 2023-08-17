@@ -17,7 +17,12 @@ binDir = "build"
 
 requires "nim >= 1.6.4"
 
+# For userscript
 requires "gm_api"
+requires "jswebsockets"
+
+# For lib
+requires "ws"
 
 import src/dirtygpt/header
 
