@@ -1,34 +1,70 @@
-const dirtyGptPort {.intdefine.} = 5552
+import std/json
+
+const
+  dirtyGptPort {.intdefine.} = 5552
+  hostname = "https://localhost:" & $dirtyGptPort
+
+const
+  promptsApi = "/prompts"
+
+type
+  DirtyGptPrompt = ref object
+    id: int
+    prompt, response: string
+  DirtyGptResponse* = ref object
+    id: int
+    text: string
 
 when defined js:
   # Userscript
-  import jswebsockets
+  import std/asyncjs
+  # from std/dom import setInterval, document, querySelector, alert
+  import std/dom 
+  import std/jsffi
 
-  var
-    socket = newWebSocket("ws://localhost:" & $dirtyGptPort)
+  from pkg/gm_api import Gm, xmlHttpRequest
 
-  socket.onOpen = proc (e: Event) =
-    echo("sent: test")
-    socket.send("test")
-  socket.onMessage = proc (e: MessageEvent) =
-    echo("received: ", e.data)
-    socket.close(StatusCode(1000), "received msg")
-  socket.onClose = proc (e: CloseEvent) =
-    echo("closing: ", e.reason)
+  proc jsObjectToJson(obj: JSObject): cstring {.importjs: "JSON.stringify(@)", nodecl.}
+  proc newPromise[T](handler: proc (resolve, reject: proc (response: T))): Future[T] {.importc, nodecl.}
+  proc sleepAsync(ms: int): Future[bool] {.async.} =
+    var promise = newPromise() do (resolve: proc(r: bool)):
+      discard setTimeout(proc = resolve(true), ms)
+    return promise
+    
+
+  proc fetchPrompts: Future[seq[DirtyGptPrompt]] {.async.} =
+    var promise = newPromise() do (resolve, reject: proc(response: seq[DirtyGptPrompt])):
+      echo "new"
+      Gm.xmlHttpRequest(
+        hostname & promptsApi,
+        "GET",
+        onload = proc (jsObj: JsObject) = resolve(jsObj.jsObjectToJson.`$`.parseJson.to seq[DirtyGptPrompt]),
+        onerror = proc (jsObj: JsObject) = reject @[]
+      )
+    return promise
+
+  proc setInterval(action: proc: Future[void]; ms: int) {.importc, nodecl.}
+
+  proc loop {.async.} =
+    echo "loop"
+    let prompts = await fetchPrompts()
+    for prompt in prompts:
+      window.alert $prompt[]
+    discard await sleepAsync 1000
+    await loop()
+
 else:
   # Lib
   import std/asyncdispatch
-  from std/asynchttpserver import Request, newAsyncHttpServer, serve, close,
-                                  AsyncHttpServer
-  from pkg/ws import WebSocket, newWebSocket, receiveStrPacket, send
+  import std/asynchttpserver
+
+  # from std/asynchttpserver import Request, newAsyncHttpServer, serve, close,
+  #                                 AsyncHttpServer
 
   type
     DirtyGpt* = ref object
       server: AsyncHttpServer
       prompts: seq[DirtyGptPrompt]
-    DirtyGptPrompt = ref object
-      id: int
-      prompt, response: string
 
   using
     self: DirtyGpt
@@ -37,16 +73,14 @@ else:
     ## Creates a new DirtyGpt websocket
     new result
     result.server = newAsyncHttpServer()
-    var dirtyGpt = result
+    let dirtyGpt = result
     asyncCheck result.server.serve(Port dirtyGptPort) do (req: Request) {.async, gcsafe.}:
-      echo "new conn"
-      echo req.hostname
-      var ws = await newWebSocket req
-      echo await ws.receiveStrPacket()
-      await ws.send("Hi, how are you?")
-      echo await ws.receiveStrPacket()
-      for prompt in dirtyGpt.prompts.mitems:
-        prompt.response = "Hi"
+      case req.url.path:
+        of promptsApi:
+          await req.respond(Http200, $ %*dirtyGpt.prompts)
+        else:
+          await req.respond(Http404, "404 Not Found")
+
 
   proc prompt*(self; prompt: string): Future[string] {.async.} =
     ## Prompts to ChatGPT by using userscript
@@ -55,16 +89,18 @@ else:
       prompt: prompt
     )
     self.prompts.add currPrompt
+    echo "create: ", currPrompt[]
+
     while true:
-      let resp = self.prompts[currPrompt.id].response
+      var resp = self.prompts[currPrompt.id].response
+      echo "poll: ", self.prompts[currPrompt.id][]
       if resp.len > 0:
         return resp
-      poll()
+      else:
+        poll()
 
   when isMainModule:
     var gpt = newDirtyGpt()
-    var resp = gpt.prompt "Hello"
-    if resp.finished:
-      echo resp.read
+    var resp = waitFor gpt.prompt "Hello"
+    echo resp
     echo "end"
-    

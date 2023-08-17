@@ -6,6 +6,10 @@
 
 </div>
 
+## Status
+
+Not working, the server is't working and userscript doesn't does anything
+
 ## License
 
 This piece of software is libre, licensed over the MIT license.
