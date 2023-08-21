@@ -28,10 +28,6 @@ using
   prompt: DirtyGptPrompt
   ws: WebSocket
 
-func connectedClients*(self): int =
-  ## How much WS clients is connected to provide answers
-  self.clients.len
-
 func requested(prompt): bool =
   prompt.requestedTo.len > 0
 
@@ -125,6 +121,12 @@ proc updateClients(self) =
       close client.ws
       self.resetUnansweredPromptsOf client.ws
       self.clients.delete i
+
+proc connectedClients*(self): int =
+  ## How much WS clients is connected to provide answers
+  self.updateClients()
+  echo self.clients
+  result = self.clients.len
 
 proc queuePrompt*(self; prompt: string): DirtyGptPrompt =
   ## Adds the prompt to queue
