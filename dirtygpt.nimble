@@ -5,13 +5,8 @@ author        = "Thiago Navarro"
 description   = "A dirty and free way to use ChatGPT in Nim"
 license       = "MIT"
 srcDir        = "src"
-bin = @["userscript"]
+# installExt = @["nim"]
 
-installExt = @["nim"]
-
-backend = "js" # for bin (client userscript)
-
-binDir = "build"
 
 # Dependencies
 
@@ -24,21 +19,36 @@ requires "jswebsockets"
 # For lib
 requires "ws"
 
-import src/dirtygpt/header
 
 from std/strformat import fmt
 from std/strutils import replace
 from std/base64 import encode
 from std/os import `/`
 
+when dirExists getCurrentDir() / "src":
+  binDir = "build"
+  import src/dirtygpt/header
+  var nimUserscript = "src/"
+else:
+  binDir = "."
+  import dirtygpt/header
+  var nimUserscript = ""
+
+nimUserscript.add "userscript"
+
+let
+  jsOutFile = binDir / "userscript.js"
+  userscriptOutFile = binDir / "userscript.user.js"
+
 task finalizeUserscript, "Uglify and add header":
-  let
-    f = binDir / bin[0] & "." & backend
-    outF = binDir / bin[0] & ".user." & backend
-  exec fmt"uglifyjs -o {f} {f}"
-  outF.writeFile userscriptHeader & "\n" & f.readFile
-  rmFile f
+  exec fmt"uglifyjs -o {jsOutFile} {jsOutFile}"
+  userscriptOutFile.writeFile userscriptHeader & "\n" & jsOutFile.readFile
+  rmFile jsOutFile
 
 task buildUserscriptRelease, "Build release version":
-  exec "nimble -d:danger build"
+  exec fmt"nim js --outDir:{binDir} -d:danger {nimUserscript}"
   finalizeUserscriptTask()
+
+after install:
+  buildUserscriptReleaseTask()
+  echo "\l\lPlease, don't forget to install the client userscript in your browser: " & getCurrentDir() / userscriptOutFile
