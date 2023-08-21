@@ -6,9 +6,11 @@ from std/asynchttpserver import Request, newAsyncHttpServer, close, listen,
                                 AsyncHttpServer, shouldAcceptRequest,
                                 acceptRequest
 from std/json import parseJson, to, `$`, `%*`, `%`, JsonParsingError
+from std/times import DateTime, `<`, now, milliseconds, `-`
+# import std/times except `$`
 
 from pkg/ws import newWebSocket, receiveStrPacket, send, Open,
-                    WebSocketClosedError
+                    WebSocketClosedError, WebSocket, close
 
 import dirtyGpt/common
 
@@ -16,16 +18,28 @@ type
   DirtyGpt* = ref object
     server: AsyncHttpServer
     prompts: seq[DirtyGptPrompt]
-    connectedClients*: int ## How much WS clients is connected to provide answers
+    clients: seq[DirtyGptClient]
+  DirtyGptClient = tuple
+    time: DateTime
+    ws: WebSocket
 
 using
   self: DirtyGpt
+  prompt: DirtyGptPrompt
+  ws: WebSocket
 
-func nextPrompt*(self): DirtyGptPrompt =
+func connectedClients*(self): int =
+  ## How much WS clients is connected to provide answers
+  self.clients.len
+
+func requested(prompt): bool =
+  prompt.requestedTo.len > 0
+
+func nextPromptFor*(self; ws): DirtyGptPrompt =
   ## Get the next unprompted prompt
   for prompt in self.prompts:
     if not prompt.requested:
-      prompt.requested = true
+      prompt.requestedTo = ws.key
       return prompt
 
 func update*(self; answered: DirtyGptPrompt): bool =
@@ -36,6 +50,22 @@ func update*(self; answered: DirtyGptPrompt): bool =
       prompt.response = answered.response
       return true
 
+proc addClient(self; ws) =
+  ## Adds new Websocket connection
+  self.clients.add (now(), ws)
+
+proc clientPing(self; ws) =
+  ## Update the client time
+  for cl in self.clients.mitems:
+    if cl.ws.key == ws.key:
+      cl.time = now()
+
+proc isOpen(self; ws): bool =
+  ## Check if this Websocket connection is on open clients
+  result = false
+  for cl in self.clients.mitems:
+    if cl.ws.key == ws.key:
+      return true
 
 proc newDirtyGpt*: DirtyGpt =
   ## Creates a new DirtyGpt websocket
@@ -44,14 +74,18 @@ proc newDirtyGpt*: DirtyGpt =
     self.server = newAsyncHttpServer()
     proc cb(req: Request) {.async.} =
       var ws = await newWebSocket req
-      inc self.connectedClients
+      self.addClient ws
       try:
         while ws.readyState == Open:
+          if not self.isOpen ws:
+            break
           let packet = await receiveStrPacket ws
           case packet:
+          of wsMsgPing:
+            self.clientPing ws
           of wsMsgGetPrompt:
-            let nextPrompt = self.nextPrompt
-            await ws.send( $ %*nextPrompt)
+            let nextPrompt = self.nextPromptFor ws
+            await ws.send($ %*nextPrompt)
           else:
             try:
               let answered = packet.parseJson.to DirtyGptPrompt
@@ -61,11 +95,6 @@ proc newDirtyGpt*: DirtyGpt =
               await ws.send "Unknown command"
       except WebSocketClosedError:
         discard
-
-      dec self.connectedClients
-
-      # for prompt in self.prompts.mitems:
-      #   prompt.response = "Hi"
 
     self.server.listen Port dirtyGptPort
 
@@ -81,7 +110,21 @@ proc stop*(self) =
   ## Stop DirtyGPT
   close self.server
 
+proc resetUnansweredPromptsOf(self; ws) =
+  ## Reset the unanswered prompts sent to `ws`
+  for prompt in self.prompts:
+    if prompt.requestedTo == ws.key:
+      prompt.requestedTo = ""
 
+proc updateClients(self) =
+  ## Remove expired clients who doesn't sent ping
+  let nowTime = now()
+  for i in countdown(self.clients.len - 1, 0):
+    let client = self.clients[i]
+    if client.time < nowTime - clientPingMaxWait.milliseconds:
+      close client.ws
+      self.resetUnansweredPromptsOf client.ws
+      self.clients.delete i
 
 proc queuePrompt*(self; prompt: string): DirtyGptPrompt =
   ## Adds the prompt to queue
@@ -118,6 +161,7 @@ proc wait*(self; prompt: DirtyGptPrompt): Future[string] {.async.} =
     let pr = self.get prompt
     if pr.response.len > 0:
       return pr.response
+    self.updateClients()
     poll()
 
 proc prompt*(self; prompt: string): Future[string] {.async.} =

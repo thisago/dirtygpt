@@ -1,5 +1,10 @@
 # Changelog
 
+## Version 0.2.0 (2023/08/21)
+
+- Added fast client expiration if no ping was sent
+- Added re-prompt if client was disconnected before responding
+
 ## Version 0.1.0 (2023/08/21)
 
 - Init

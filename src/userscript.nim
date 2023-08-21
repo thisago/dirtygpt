@@ -68,12 +68,14 @@ proc main {.async.} =
       available = true
       loopInterval: Interval
 
-    proc getPromptLoop(loopDelay = 500) =
+    proc getPromptLoop =
       loopInterval = setInterval(proc =
         if available:
           ws.send wsMsgGetPrompt
           available = false
-      , loopDelay)
+        else:
+          ws.send wsMsgPing
+      , clientLoopTime)
 
     ws.onOpen = proc (e: Event) =
       getPromptLoop()
@@ -81,11 +83,13 @@ proc main {.async.} =
     ws.onMessage = proc (e: MessageEvent) =
       discard (proc {.async.} =
         var prompt = parseJson($e.data).to DirtyGptPrompt
-        prompt.response = await prompt prompt.text
-        available = true
-        ws.send( $ %*prompt)
+        if not prompt.isNil:
+          prompt.response = await prompt prompt.text
+          available = true
+          ws.send($ %*prompt)
       )()
     ws.onClose = proc (e: CloseEvent) =
+      echo "closed"
       clearInterval loopInterval
       startWs()
   startWs()
