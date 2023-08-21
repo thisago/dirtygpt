@@ -1,3 +1,5 @@
+from std/json import parseJson, to, `$`, `%*`, `%`
+
 const
   dirtyGptPort {.intdefine.} = 5552
 
@@ -19,16 +21,18 @@ when defined js:
   import std/jsconsole
 
   from std/dom import document, Interval, click, setInterval, clearInterval,
-                      Element
-  from std/json import parseJson, to
+                      Element, querySelectorAll, Interval, clearInterval
 
   import pkg/jswebsockets
 
   import dirtyGpt/jsutils
+  import dirtyGpt/turndown
 
-  echo "start"
+  proc getPromptResponse: string =
+    let responses = document.querySelectorAll ".markdown"
+    result = turndown responses[^1].innerHtml
+
   proc main {.async.} =
-    echo "getInput"
     let
       promptField = await document.waitEl "#prompt-textarea"
       promptButton = await document.waitEl "#prompt-textarea + button"
@@ -42,8 +46,10 @@ when defined js:
         interval = setInterval(proc() =
           if not promptButton.disabled:
             click button
+            clearInterval interval
             resolve()
         , delay)
+
 
     proc prompt(text: cstring): Future[string] {.async.} =
       var
@@ -53,6 +59,7 @@ when defined js:
 
       promptField.setInputValue text
       await clickButton promptButton
+      await sleep 500
 
       return newPromise[string]() do (resolve: (string) -> void):
         interval = setInterval(proc() =
@@ -60,30 +67,40 @@ when defined js:
             clearInterval interval
             resolve ""
           else:
-            echo promptButton.innerText
             if promptButton.innerText.len == 0:
               clearInterval interval
-              resolve "success"
+              resolve getPromptResponse()
+          dec limit
         , delay)
 
+    proc startWs =
+      var
+        ws = newWebSocket("ws://localhost:" & $dirtyGptPort)
+        available = true
+        loopInterval: Interval
 
-    var
-      ws = newWebSocket("ws://localhost:" & $dirtyGptPort)
+      proc getPromptLoop(loopDelay = 500) =
+        loopInterval = setInterval(proc =
+          if available:
+            ws.send wsMsgGetPrompt
+            available = false
+        , loopDelay)
 
-    proc promptNext() =
-      ws.send wsMsgGetPrompt
+      ws.onOpen = proc (e: Event) =
+        getPromptLoop()
 
-    ws.onOpen = proc (e: Event) =
-      promptNext()
-      
-    ws.onMessage = proc (e: MessageEvent) =
-      discard (proc {.async.} =
-        let prompt = parseJson($e.data).to DirtyGptPrompt
-        let response = await prompt prompt.text
-        echo response
-      )()
-    ws.onClose = proc (e: CloseEvent) =
-      echo("closing: ", e.reason)
+      ws.onMessage = proc (e: MessageEvent) =
+        discard (proc {.async.} =
+          var prompt = parseJson($e.data).to DirtyGptPrompt
+          prompt.response = await prompt prompt.text
+          available = true
+          ws.send( $ %*prompt)
+        )()
+      ws.onClose = proc (e: CloseEvent) =
+        echo "closed"
+        clearInterval loopInterval
+        startWs()
+    startWs()
   when isMainModule:
     discard main()
 else:
@@ -92,7 +109,7 @@ else:
   from std/asynchttpserver import Request, newAsyncHttpServer, close, listen,
                                   AsyncHttpServer, shouldAcceptRequest,
                                   acceptRequest
-  from std/json import `$`, `%*`, `%`
+  from std/json import JsonParsingError
 
   from pkg/ws import newWebSocket, receiveStrPacket, send, Open,
                       WebSocketClosedError
@@ -101,6 +118,7 @@ else:
     DirtyGpt* = ref object
       server: AsyncHttpServer
       prompts: seq[DirtyGptPrompt]
+      connectedClients: int ## How much WS clients is connected to provide answers
 
   using
     self: DirtyGpt
@@ -112,6 +130,15 @@ else:
         prompt.requested = true
         return prompt
 
+  func update*(self; answered: DirtyGptPrompt): bool =
+    ## Update prompt with answered result
+    result = false
+    for prompt in self.prompts:
+      if prompt.id == answered.id:
+        prompt.response = answered.response
+        return true
+
+
   proc newDirtyGpt*: DirtyGpt =
     ## Creates a new DirtyGpt websocket
     new result
@@ -120,23 +147,31 @@ else:
       proc cb(req: Request) {.async.} =
         echo (req.reqMethod, req.url, req.headers)
         var ws = await newWebSocket req
+        inc self.connectedClients
         try:
           while ws.readyState == Open:
             let packet = await receiveStrPacket ws
             case packet:
             of wsMsgGetPrompt:
               let nextPrompt = self.nextPrompt
-              await ws.send($ %*nextPrompt)
+              await ws.send( $ %*nextPrompt)
             else:
-              await ws.send "Unknown command"
+              try:
+                let answered = packet.parseJson.to DirtyGptPrompt
+                if not self.update answered:
+                  echo "Error, prompt not exists: ", answered[]
+              except JsonParsingError:
+                await ws.send "Unknown command"
         except WebSocketClosedError:
-          echo "closed"
-          
+          discard
+
+        dec self.connectedClients
+
         # for prompt in self.prompts.mitems:
         #   prompt.response = "Hi"
 
       self.server.listen Port dirtyGptPort
-      
+
       while true:
         if self.server.shouldAcceptRequest:
           await self.server.acceptRequest cb
@@ -149,26 +184,57 @@ else:
     ## Stop DirtyGPT
     close self.server
 
-  proc prompt*(self; prompt: string): Future[string] {.async.} =
-    ## Prompts to ChatGPT by using userscript
-    let currPrompt = DirtyGptPrompt(
+
+
+  proc queuePrompt*(self; prompt: string): DirtyGptPrompt =
+    ## Adds the prompt to queue
+    result = DirtyGptPrompt(
       id: self.prompts.len,
       text: prompt
     )
-    self.prompts.add currPrompt
-    echo "create: ", currPrompt[]
+    self.prompts.add result
+    echo "create: ", result[]
 
+  proc isAnswered*(self; prompt: DirtyGptPrompt): bool =
+    ## Checks if the prompt was answered
+    self.prompts[prompt.id].response.len > 0
+
+  proc isRequested*(self; prompt: DirtyGptPrompt): bool =
+    ## Checks if the prompt was requested
+    self.prompts[prompt.id].requested
+
+  proc get*(self; prompt: DirtyGptPrompt): DirtyGptPrompt =
+    ## Gets the prompt if it's completed, if not, just return what you've provided
+    result = prompt
+    var resp = self.prompts[prompt.id]
+    if resp.requested:
+      if resp.response.len > 0:
+        self.prompts.delete prompt.id
+        result = resp
+    
+    
+  proc wait*(self; prompt: DirtyGptPrompt): Future[string] {.async.} =
+    ## Waits the prompt to be answered
+    ## 
+    ## Can be blocking
     while true:
-      var resp = self.prompts[currPrompt.id]
-      if resp.requested:
-        if resp.response.len > 0:
-          return resp.response
+      let pr = self.get prompt
+      if pr.response.len > 0:
+        return pr.response
       poll()
 
-  when isMainModule:
-    var gpt = newDirtyGpt()
-    var resp = waitFor gpt.prompt "Hello"
-    echo resp
-    echo "end"
+  proc prompt*(self; prompt: string): Future[string] {.async.} =
+    ## Prompts to ChatGPT by using userscript
+    ## 
+    ## Can be blocking
+    let currPrompt = self.queuePrompt prompt
+    result = await self.wait currPrompt
 
-    stop gpt
+  when isMainModule:
+    proc main {.async.} =
+      var gpt = newDirtyGpt()
+      echo await gpt.prompt "list 5 fruits"
+
+      stop gpt
+
+  waitFor main()

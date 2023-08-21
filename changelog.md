@@ -6,3 +6,6 @@
 - Added server prompt sending
 - Added userscript prompting
 - Added WS again to communicate
+- Implemented HTML response getting
+- Added more functions to prompt without blocking
+- Added HTML to markdown using Turndown JS

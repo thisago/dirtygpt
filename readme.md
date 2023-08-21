@@ -6,9 +6,15 @@
 
 </div>
 
-## Status
+## About
 
-Not working, the server is't working and userscript doesn't does anything
+Prompt in ChatGPT web using Nim!
+
+## How it works?
+
+The client userscript controls the ChatGPT webpage, it connects with backend,
+the lib via Websocket and wait the prompts. Once that userscript receives, it
+prompts to AI manipulating DOM and send to backend the answered MD.
 
 ## License
 
