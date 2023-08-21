@@ -20,35 +20,38 @@ requires "jswebsockets"
 requires "ws"
 
 
-from std/strformat import fmt
-from std/strutils import replace
-from std/base64 import encode
-from std/os import `/`
+const currDir = getCurrentDir()
 
-when dirExists getCurrentDir() / "src":
-  binDir = "build"
-  import src/dirtygpt/header
-  var nimUserscript = "src/"
-else:
-  binDir = "."
-  import dirtygpt/header
-  var nimUserscript = ""
+when "dirtygpt" in currDir or ".nimble" in currDir:
+  from std/strformat import fmt
+  from std/strutils import replace, contains
+  from std/base64 import encode
+  from std/os import `/`
 
-nimUserscript.add "userscript"
+  when dirExists currDir / "src":
+    binDir = "build"
+    import src/dirtygpt/header
+    var nimUserscript = "src/"
+  else:
+    binDir = "."
+    import dirtygpt/header
+    var nimUserscript = ""
 
-let
-  jsOutFile = binDir / "userscript.js"
-  userscriptOutFile = binDir / "userscript.user.js"
+  nimUserscript.add "userscript"
 
-task finalizeUserscript, "Uglify and add header":
-  exec fmt"uglifyjs -o {jsOutFile} {jsOutFile}"
-  userscriptOutFile.writeFile userscriptHeader & "\n" & jsOutFile.readFile
-  rmFile jsOutFile
+  let
+    jsOutFile = binDir / "userscript.js"
+    userscriptOutFile = binDir / "userscript.user.js"
 
-task buildUserscriptRelease, "Build release version":
-  exec fmt"nim js --outDir:{binDir} -d:danger {nimUserscript}"
-  finalizeUserscriptTask()
+  task finalizeUserscript, "Uglify and add header":
+    exec fmt"uglifyjs -o {jsOutFile} {jsOutFile}"
+    userscriptOutFile.writeFile userscriptHeader & "\n" & jsOutFile.readFile
+    rmFile jsOutFile
 
-after install:
-  buildUserscriptReleaseTask()
-  echo "\l\lPlease, don't forget to install the client userscript in your browser: " & getCurrentDir() / userscriptOutFile
+  task buildUserscriptRelease, "Build release version":
+    exec fmt"nim js --outDir:{binDir} -d:danger {nimUserscript}"
+    finalizeUserscriptTask()
+
+  after install:
+    buildUserscriptReleaseTask()
+    echo "\l\lPlease, don't forget to install the client userscript in your browser: " & currDir / userscriptOutFile

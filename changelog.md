@@ -11,3 +11,7 @@
 - Added HTML to markdown using Turndown JS
 - Separated userscript from lib
 - Fixed installation
+- Fixed nimble file
+- Fixed main module example
+- Exported `connectedClients`
+- Removed server debug echo

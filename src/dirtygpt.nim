@@ -16,7 +16,7 @@ type
   DirtyGpt* = ref object
     server: AsyncHttpServer
     prompts: seq[DirtyGptPrompt]
-    connectedClients: int ## How much WS clients is connected to provide answers
+    connectedClients*: int ## How much WS clients is connected to provide answers
 
 using
   self: DirtyGpt
@@ -43,7 +43,6 @@ proc newDirtyGpt*: DirtyGpt =
   proc serve(self) {.async.} =
     self.server = newAsyncHttpServer()
     proc cb(req: Request) {.async.} =
-      echo (req.reqMethod, req.url, req.headers)
       var ws = await newWebSocket req
       inc self.connectedClients
       try:
@@ -135,4 +134,4 @@ when isMainModule:
 
     stop gpt
 
-waitFor main()
+  waitFor main()
