@@ -5,7 +5,7 @@ author        = "Thiago Navarro"
 description   = "A dirty and free way to use ChatGPT in Nim"
 license       = "MIT"
 srcDir        = "src"
-bin = @["dirtygpt"]
+bin = @["userscript"]
 
 installExt = @["nim"]
 
