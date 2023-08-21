@@ -14,6 +14,8 @@
 
 Prompt in ChatGPT web using Nim!
 
+See this lib working at [cligpt](https://github.com/thisago/cligpt)
+
 ## How it works?
 
 The client userscript controls the ChatGPT webpage, it connects with backend,
