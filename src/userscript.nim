@@ -8,10 +8,12 @@ import std/sugar
 import std/jsconsole
 
 from std/dom import document, Interval, click, setInterval, clearInterval,
-                    Element, querySelectorAll, Interval, clearInterval
+                    Element, querySelectorAll, Interval, clearInterval,
+                    setTimeout, clearTimeout, Timeout
 from std/json import parseJson, to, `$`, `%*`, `%`
 
 import pkg/jswebsockets
+from pkg/gm_api import Gm, registerMenuCommand
 
 import dirtyGpt/jsutils
 import dirtyGpt/turndown
@@ -67,6 +69,13 @@ proc main {.async.} =
       ws = newWebSocket("ws://localhost:" & $dirtyGptPort)
       available = true
       loopInterval: Interval
+      closeTimer: Timeout
+
+    closeTimer = setTimeout(proc =
+      ws.onClose = proc (e: CloseEvent) = discard
+      close ws
+      startWs()
+    , clientSocketTimeout)
 
     proc getPromptLoop =
       loopInterval = setInterval(proc =
@@ -77,7 +86,9 @@ proc main {.async.} =
           ws.send wsMsgPing
       , clientLoopTime)
 
+
     ws.onOpen = proc (e: Event) =
+      clearTimeout closeTimer
       getPromptLoop()
 
     ws.onMessage = proc (e: MessageEvent) =
@@ -88,10 +99,14 @@ proc main {.async.} =
           available = true
           ws.send($ %*prompt)
       )()
+
     ws.onClose = proc (e: CloseEvent) =
-      echo "closed"
       clearInterval loopInterval
+      clearTimeout closeTimer
       startWs()
+
   startWs()
+  # Gm.registerMenuCommand("Start WS", startWs, "s")
+
 when isMainModule:
   discard main()

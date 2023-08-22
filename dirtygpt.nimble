@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.2.0"
+version       = "0.2.1"
 author        = "Thiago Navarro"
 description   = "A dirty and free way to use ChatGPT in Nim"
 license       = "MIT"

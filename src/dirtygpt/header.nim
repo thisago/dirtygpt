@@ -9,6 +9,9 @@ const userscriptHeader* = genMetadataBlock(
     "https://chat.openai.com/*"
   ],
   runAt = GmRunAt.docIdle,
+  # grant = [
+  #   GmPermitions.registerMenuCommand,
+  # ],
   require = [
     "https://unpkg.com/turndown/dist/turndown.js",
   ]

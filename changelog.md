@@ -1,5 +1,9 @@
 # Changelog
 
+## Version 0.2.1 (2023/08/22)
+
+- Added timeout to websocket connection in userscript
+
 ## Version 0.2.0 (2023/08/21)
 
 - Added fast client expiration if no ping was sent
