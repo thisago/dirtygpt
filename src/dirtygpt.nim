@@ -125,7 +125,6 @@ proc updateClients(self) =
 proc connectedClients*(self): int =
   ## How much WS clients is connected to provide answers
   self.updateClients()
-  echo self.clients
   result = self.clients.len
 
 proc queuePrompt*(self; prompt: string): DirtyGptPrompt =
