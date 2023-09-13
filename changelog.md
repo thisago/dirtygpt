@@ -3,6 +3,7 @@
 ## Version 0.2.3 (2023/09/13)
 
 - Fixed duplicate prompt for recently closed connections in userscript (when connection not timed out)
+- Fixed version in userscript header
 
 ## Version 0.2.2 (2023/09/13)
 

@@ -4,7 +4,7 @@ const userscriptHeader* = genMetadataBlock(
   name = "DirtyGPT",
   description = "A dirty and free way to use ChatGPT in Nim",
   author = "Thiago Navarro",
-  version = "0.1.0",
+  version = "0.2.3",
   match = [
     "https://chat.openai.com/*"
   ],
