@@ -13,11 +13,16 @@ from std/dom import document, Interval, click, setInterval, clearInterval,
 from std/json import parseJson, to, `$`, `%*`, `%`
 
 import pkg/jswebsockets
-from pkg/gm_api import Gm, registerMenuCommand
+from pkg/gm_api import Gm
 
 import dirtyGpt/jsutils
 import dirtyGpt/turndown
 import dirtyGpt/common
+
+when defined release:
+  template debugEcho(x: untyped) =
+    ## Disables debug echo
+    discard
 
 proc getPromptResponse: string =
   let responses = document.querySelectorAll ".markdown"
@@ -66,6 +71,7 @@ proc main {.async.} =
 
     return newPromise[string]() do (resolve: (string) -> void):
       interval = setInterval(proc() =
+        debugEcho "prompt connection: " & $wid
         if limit == 0 or wsId != wid or not ws.available:
           clearInterval interval
           resolve ""
@@ -93,10 +99,13 @@ proc main {.async.} =
         , clientLoopTime)
 
       ws.onOpen = proc (e: Event) =
+        inc wsId
+        debugEcho "new connection: " & $wsId
         getPromptLoop()
 
       ws.onMessage = proc (e: MessageEvent) =
         let wid = wsId
+        debugEcho "msg connection: " & $wsId
         discard (proc {.async.} =
           var prompt = parseJson($e.data).to DirtyGptPrompt
           if not prompt.isNil:
@@ -107,14 +116,19 @@ proc main {.async.} =
         )()
 
       ws.onClose = proc (e: CloseEvent) =
-        inc wsId
         clearInterval loopInterval
         ws = nil
         startWs()
     else:
-      echo "Why open another WS?"
+      debugEcho "Why open another WS?"
 
   startWs()
+  # Gm.registerMenuCommand("Force DirtyGPT connection", proc =
+  #   if not ws.isNil:
+  #     sclose ws
+  #     ws = nil
+  #   startWs()
+  # , "f")
 
 when isMainModule:
   discard main()
