@@ -18,8 +18,8 @@ See this lib working at [cligpt](https://github.com/thisago/cligpt)
 
 ## How it works?
 
-When you create a new instance of `DirtyGPT`, a async http web server will start
-in asynchronous, it accept multiple websocket connections and when you query the
+When you create a new instance of `DirtyGPT`, an http web server starts
+asynchronously, it accept multiple websocket connections and when you query the
 prompt in lib, the server will add your prompt to the queue, and the connected
 userscripts will request a prompt. When the server sends the prompt to a client
 (userscript), it saves the client ID in prompt and if for some reason the client
