@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.2.1"
+version       = "0.2.2"
 author        = "Thiago Navarro"
 description   = "A dirty and free way to use ChatGPT in Nim"
 license       = "MIT"
@@ -46,7 +46,11 @@ when "dirtygpt" in currDir or ".nimble" in currDir:
     userscriptOutFile.writeFile userscriptHeader & "\n" & jsOutFile.readFile
     rmFile jsOutFile
 
-  task buildUserscriptRelease, "Build release version":
+  task buildUserscript, "Build userscript":
+    exec fmt"nim js --outDir:{binDir} {nimUserscript}"
+    finalizeUserscriptTask()
+
+  task buildUserscriptRelease, "Build userscript in release version":
     exec fmt"nim js --outDir:{binDir} -d:danger {nimUserscript}"
     finalizeUserscriptTask()
 

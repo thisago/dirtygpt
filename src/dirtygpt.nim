@@ -81,7 +81,7 @@ proc newDirtyGpt*: DirtyGpt =
             self.clientPing ws
           of wsMsgGetPrompt:
             let nextPrompt = self.nextPromptFor ws
-            await ws.send($ %*nextPrompt)
+            await ws.send( $ %*nextPrompt)
           else:
             try:
               let answered = packet.parseJson.to DirtyGptPrompt
@@ -152,11 +152,11 @@ proc get*(self; prompt: DirtyGptPrompt): DirtyGptPrompt =
     if resp.response.len > 0:
       self.prompts.delete prompt.id
       result = resp
-  
-  
+
+
 proc wait*(self; prompt: DirtyGptPrompt): Future[string] {.async.} =
   ## Waits the prompt to be answered
-  ## 
+  ##
   ## Can be blocking
   while true:
     let pr = self.get prompt
@@ -167,7 +167,7 @@ proc wait*(self; prompt: DirtyGptPrompt): Future[string] {.async.} =
 
 proc prompt*(self; prompt: string): Future[string] {.async.} =
   ## Prompts to ChatGPT by using userscript
-  ## 
+  ##
   ## Can be blocking
   let currPrompt = self.queuePrompt prompt
   result = await self.wait currPrompt
@@ -175,7 +175,7 @@ proc prompt*(self; prompt: string): Future[string] {.async.} =
 when isMainModule:
   proc main {.async.} =
     var gpt = newDirtyGpt()
-    echo await gpt.prompt "list 5 fruits"
+    echo await gpt.prompt "ls -la"
 
     stop gpt
 

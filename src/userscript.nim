@@ -23,38 +23,50 @@ proc getPromptResponse: string =
   let responses = document.querySelectorAll ".markdown"
   result = turndown responses[^1].innerHtml
 
+proc sclose(ws: Websocket) =
+  # Silent close a socket (disable onClose)
+  ws.onClose = proc (e: CloseEvent) = discard
+  close ws
+func available(ws: Websocket): bool {.inline.} =
+  # check if ws is open
+  not ws.isNil and ws.readyState == Open
+
 proc main {.async.} =
   let
     promptField = await document.waitEl "#prompt-textarea"
     promptButton = await document.waitEl "#prompt-textarea + button"
+  var
+    ws: WebSocket
+    wsId = 0
 
-  proc clickButton(button: Element) {.async.} =
+  proc clickButton(wid: int; button: Element) {.async.} =
     var
       interval: Interval
       delay = 500
 
     await newPromise() do (resolve: () -> void):
       interval = setInterval(proc() =
+        if wsId != wid or not ws.available:
+          clearInterval interval
         if not promptButton.disabled:
           click button
           clearInterval interval
           resolve()
       , delay)
 
-
-  proc prompt(text: cstring): Future[string] {.async.} =
+  proc prompt(wid: int; text: cstring): Future[string] {.async.} =
     var
       interval: Interval
       limit = 500
       delay = 500
 
     promptField.setInputValue text
-    await clickButton promptButton
+    await wid.clickButton promptButton
     await sleep 500
 
     return newPromise[string]() do (resolve: (string) -> void):
       interval = setInterval(proc() =
-        if limit == 0:
+        if limit == 0 or wsId != wid or not ws.available:
           clearInterval interval
           resolve ""
         else:
@@ -65,48 +77,44 @@ proc main {.async.} =
       , delay)
 
   proc startWs =
-    var
+    if ws.isNil or ws.readyState == Closed:
+      var
+        available = true
+        loopInterval: Interval
       ws = newWebSocket("ws://localhost:" & $dirtyGptPort)
-      available = true
-      loopInterval: Interval
-      closeTimer: Timeout
 
-    closeTimer = setTimeout(proc =
-      ws.onClose = proc (e: CloseEvent) = discard
-      close ws
-      startWs()
-    , clientSocketTimeout)
+      proc getPromptLoop =
+        loopInterval = setInterval(proc =
+          if available:
+            ws.send wsMsgGetPrompt
+            available = false
+          else:
+            ws.send wsMsgPing
+        , clientLoopTime)
 
-    proc getPromptLoop =
-      loopInterval = setInterval(proc =
-        if available:
-          ws.send wsMsgGetPrompt
-          available = false
-        else:
-          ws.send wsMsgPing
-      , clientLoopTime)
+      ws.onOpen = proc (e: Event) =
+        getPromptLoop()
 
+      ws.onMessage = proc (e: MessageEvent) =
+        let wid = wsId
+        discard (proc {.async.} =
+          var prompt = parseJson($e.data).to DirtyGptPrompt
+          if not prompt.isNil:
+            prompt.response = await wid.prompt prompt.text
+            available = true
+            if wsId == wid and ws.available:
+              ws.send($ %*prompt)
+        )()
 
-    ws.onOpen = proc (e: Event) =
-      clearTimeout closeTimer
-      getPromptLoop()
-
-    ws.onMessage = proc (e: MessageEvent) =
-      discard (proc {.async.} =
-        var prompt = parseJson($e.data).to DirtyGptPrompt
-        if not prompt.isNil:
-          prompt.response = await prompt prompt.text
-          available = true
-          ws.send($ %*prompt)
-      )()
-
-    ws.onClose = proc (e: CloseEvent) =
-      clearInterval loopInterval
-      clearTimeout closeTimer
-      startWs()
+      ws.onClose = proc (e: CloseEvent) =
+        inc wsId
+        clearInterval loopInterval
+        ws = nil
+        startWs()
+    else:
+      echo "Why open another WS?"
 
   startWs()
-  # Gm.registerMenuCommand("Start WS", startWs, "s")
 
 when isMainModule:
   discard main()

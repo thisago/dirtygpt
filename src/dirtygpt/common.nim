@@ -6,7 +6,7 @@ const
   clientPingMaxWait* {.intdefine.} = clientLoopTime * 2 ## Max interval without receiving ping
 
 const
-  clientSocketTimeout* {.intdefine.} = 2000
+  clientSocketTimeout* {.intdefine.} = 3000
 
 const
   wsMsgGetPrompt* = "getPrompt"

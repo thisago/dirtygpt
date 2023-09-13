@@ -1,5 +1,11 @@
 # Changelog
 
+## Version 0.2.2 (2023/09/13)
+
+- Fixes in userscript
+  - No more duplicate prompt
+  - Faster connection (Stopping to abort connection when connecting)
+
 ## Version 0.2.1 (2023/08/22)
 
 - Added timeout to websocket connection in userscript
