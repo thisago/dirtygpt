@@ -49,7 +49,8 @@ Please, don't forget to install the client userscript in your browser: ~/.nimble
 ```
 
 Install the provided Javascript userscript path in a userscript manager in your
-browser, like [Violentmonkey][violentmonkey].
+browser, like [Greasemonkey][greasemonkey] (Violentmonkey doesn't works, the
+browser blocks you to open localhost WS)
 
 ## Usage
 
@@ -87,5 +88,5 @@ This piece of software is libre, licensed over the MIT license. Feel free to use
 
 <!-- Refs -->
 
-[violentmonkey]: https://violentmonkey.github.io
+[greasemonkey]: https://www.greasespot.net/
 [chatgpt]: https://chat.openai.com
