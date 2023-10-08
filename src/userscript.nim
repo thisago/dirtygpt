@@ -5,24 +5,24 @@ when not isMainModule:
 
 import std/asyncjs
 import std/sugar
-import std/jsconsole
 
 from std/dom import document, Interval, click, setInterval, clearInterval,
                     Element, querySelectorAll, Interval, clearInterval,
                     setTimeout, clearTimeout, Timeout
 from std/json import parseJson, to, `$`, `%*`, `%`
+from std/strformat import fmt
 
 import pkg/jswebsockets
-from pkg/gm_api import Gm
 
 import dirtyGpt/jsutils
 import dirtyGpt/turndown
 import dirtyGpt/common
 
-when defined release:
-  template debugEcho(x: untyped) =
-    ## Disables debug echo
-    discard
+const
+  promptFieldSel = "#prompt-textarea"
+  promptButtonSel = fmt"{promptFieldSel} + button"
+
+let logger = newLogger()
 
 proc getPromptResponse: string =
   let responses = document.querySelectorAll ".markdown"
@@ -37,98 +37,86 @@ func available(ws: Websocket): bool {.inline.} =
   not ws.isNil and ws.readyState == Open
 
 proc main {.async.} =
-  let
-    promptField = await document.waitEl "#prompt-textarea"
-    promptButton = await document.waitEl "#prompt-textarea + button"
+  let promptField = await document.waitEl promptFieldSel
   var
     ws: WebSocket
-    wsId = 0
+    wsOpen = false
+    lastPrompt: string
 
-  proc clickButton(wid: int; button: Element) {.async.} =
-    var
-      interval: Interval
-      delay = 500
+  proc clickSubmitButton {.async.} =
+    if ws.available:
+      click await document.waitEl promptButtonSel
 
-    await newPromise() do (resolve: () -> void):
-      interval = setInterval(proc() =
-        if wsId != wid or not ws.available:
-          clearInterval interval
-        if not promptButton.disabled:
-          click button
-          clearInterval interval
-          resolve()
-      , delay)
-
-  proc prompt(wid: int; text: cstring): Future[string] {.async.} =
+  proc prompt(text: cstring): Future[string] {.async.} =
     var
       interval: Interval
       limit = 500
       delay = 500
 
+    logger.log lvlDebug, fmt"Prompting '{text}'"
     promptField.setInputValue text
-    await wid.clickButton promptButton
-    await sleep 500
+    await clickSubmitButton()
+    await sleep 500 # make sure that was clicked
 
-    return newPromise[string]() do (resolve: (string) -> void):
-      interval = setInterval(proc() =
-        debugEcho "prompt connection: " & $wid
-        if limit == 0 or wsId != wid or not ws.available:
-          clearInterval interval
-          resolve ""
-        else:
-          if promptButton.innerText.len == 0:
-            clearInterval interval
-            resolve getPromptResponse()
-        dec limit
-      , delay)
+    discard await document.waitEl promptButtonSel
+    result = getPromptResponse()
 
   proc startWs =
     if ws.isNil or ws.readyState == Closed:
       var
         available = true
         loopInterval: Interval
-      ws = newWebSocket("ws://localhost:" & $dirtyGptPort)
+      ws = newWebSocket fmt"ws://localhost:{dirtyGptPort}"
 
       proc getPromptLoop =
         loopInterval = setInterval(proc =
           if available:
             ws.send wsMsgGetPrompt
             available = false
+            logger.log lvlDebug, fmt"Requesting new prompt for server connection ."
           else:
             ws.send wsMsgPing
+            logger.log lvlDebug, fmt"Pinging server connection."
         , clientLoopTime)
 
       ws.onOpen = proc (e: Event) =
-        inc wsId
-        debugEcho "new connection: " & $wsId
+        logger.log lvlDebug, fmt"New server connection"
+        wsOpen = true
         getPromptLoop()
 
       ws.onMessage = proc (e: MessageEvent) =
-        let wid = wsId
-        debugEcho "msg connection: " & $wsId
         discard (proc {.async.} =
           var prompt = parseJson($e.data).to DirtyGptPrompt
           if not prompt.isNil:
-            prompt.response = await wid.prompt prompt.text
+            logger.log lvlDebug, fmt"Received new prompt from server . {prompt[]}"
+            lastPrompt = prompt.text
+            prompt.response = await prompt prompt.text
             available = true
-            if wsId == wid and ws.available:
-              ws.send($ %*prompt)
+            if ws.available:
+              if prompt.text == lastPrompt:
+                ws.send($ %*prompt)
+                logger.log lvlDebug, fmt"Sent prompt response to server {prompt[]}"
+              else:
+                logger.log lvlInfo, fmt"Discarding response for '{prompt.text}'" # new prompt was requested
+            else:
+              logger.log lvlInfo, fmt"Connection with server is invalid. Cannot send prompt response"
+          else:
+            logger.log lvlDebug, fmt"Prompt data was invalid"
         )()
 
       ws.onClose = proc (e: CloseEvent) =
+        if wsOpen:
+          logger.log lvlInfo, fmt"Closed server connection. {e.reason}"
+        else:
+          logger.log lvlInfo, fmt"Cannot connect to server. {e.reason}"
+        wsOpen = false
         clearInterval loopInterval
         ws = nil
         startWs()
     else:
-      debugEcho "Why open another WS?"
+      logger.log lvlInfo, fmt"Websocket already connected to server"
 
   startWs()
-  # Gm.registerMenuCommand("Force DirtyGPT connection", proc =
-  #   if not ws.isNil:
-  #     sclose ws
-  #     ws = nil
-  #   startWs()
-  # , "f")
 
 when isMainModule:
   discard main()

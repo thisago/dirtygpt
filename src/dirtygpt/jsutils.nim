@@ -30,17 +30,6 @@ proc waitEl*(
   ##   The default condition checks if the element is not null.
   ## - `checkInterval`: The interval in milliseconds between attempts (default is 1000ms).
   ##
-  ## Example usage:
-  ##
-  ## ```nim
-  ## const baseEl = document.getElementById("baseElement")
-  ## try:
-  ##   let el = await waitEl(baseEl, "targetSelector")
-  ##   echo "Element found:", el
-  ## except JsError as e:
-  ##   echo "Error:", e.message
-  ## ```
-  ##
   ## Translated by ChatGPT from https://git.ozzuu.com/thisago/wppGroupMembers/src/commit/e902dfe5268119f8ded6597f53dd388b0f175135/src/main.user.js#L191
   var
     interval: Interval

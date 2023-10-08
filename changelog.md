@@ -1,5 +1,15 @@
 # Changelog
 
+## Version 0.3.0 (2023/10/08)
+
+- Fixed response waiting at userscript
+- Simplified userscript
+- Added debug switch to show DirtyGPT status and actions: `-d:dirtyGptDebugLvl={0-2}`
+  at server lib and usercript
+- Added `disconnectClients` proc
+- Removed wsId counting from userscript, instead, added last prompt saving. (Closes #1)
+- Added proc to delete prompt from queue
+
 ## Version 0.2.3 (2023/09/13)
 
 - Fixed duplicate prompt for recently closed connections in userscript (when connection not timed out)
