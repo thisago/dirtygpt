@@ -10,6 +10,7 @@
 - Removed wsId counting from userscript, instead, added last prompt saving. (Closes #1)
 - Added proc to delete prompt from queue
 - Renamed project from `dirtygpt` to `dirtyGpt`
+- Fixed crash when userscript request the prompt but there's no more
 
 ## Version 0.2.3 (2023/09/13)
 

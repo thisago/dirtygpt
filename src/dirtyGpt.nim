@@ -106,8 +106,9 @@ proc newDirtyGpt*: DirtyGpt =
             logger.log lvlDebug, fmt"Client '{ws.key}' pinging"
           of wsMsgGetPrompt:
             let nextPrompt = self.nextPromptFor ws
-            await ws.send($ %*nextPrompt)
-            logger.log lvlDebug, fmt"Sent to client '{ws.key}' prompt: {nextPrompt[]}"
+            if not nextPrompt.isNil:
+              await ws.send($ %*nextPrompt)
+              logger.log lvlDebug, fmt"Sent to client '{ws.key}' prompt: {nextPrompt[]}"
           else:
             try:
               let answered = packet.parseJson.to DirtyGptPrompt
