@@ -20,7 +20,7 @@ requires "ws"
 
 const currDir = getCurrentDir()
 
-when "dirtygpt" in currDir or ".nimble" in currDir:
+when "dirtyGpt" in currDir or ".nimble" in currDir:
   from std/strformat import fmt
   from std/strutils import replace, contains
   from std/base64 import encode
@@ -28,11 +28,11 @@ when "dirtygpt" in currDir or ".nimble" in currDir:
 
   when dirExists currDir / "src":
     binDir = "build"
-    import src/dirtygpt/header
+    import src/dirtyGpt/header
     var nimUserscript = "src/"
   else:
     binDir = "."
-    import dirtygpt/header
+    import dirtyGpt/header
     var nimUserscript = ""
 
   nimUserscript.add "userscript"
